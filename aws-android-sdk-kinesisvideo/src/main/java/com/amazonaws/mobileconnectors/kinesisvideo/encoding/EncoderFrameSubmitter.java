@@ -138,7 +138,6 @@ public class EncoderFrameSubmitter {
 
             byte[] nv21;
             ByteBuffer yBuffer = frameImageYUV420.getPlanes()[0].getBuffer();
-//            ByteBuffer uBuffer = frameImageYUV420.getPlanes()[1].getBuffer();
             ByteBuffer vuBuffer = frameImageYUV420.getPlanes()[2].getBuffer();
 
             assert(frameImageYUV420.getPlanes()[0].getRowStride() == 1);
@@ -146,13 +145,11 @@ public class EncoderFrameSubmitter {
             Log.d(TAG, "GOT THE PLANES");
 
             int ysize = yBuffer.remaining();
-//            int usize = uBuffer.remaining();
             int vusize = vuBuffer.remaining();
 
             nv21 = new byte[ysize + vusize];
 
-            yBuffer.get(nv21,  0, ysize);
-//            vBuffer.get(nv21, ysize, vsize);
+            yBuffer.get(nv21, 0, ysize);
             vuBuffer.get(nv21, ysize, vusize);
 
             Log.d(TAG, "GOT THESE");
