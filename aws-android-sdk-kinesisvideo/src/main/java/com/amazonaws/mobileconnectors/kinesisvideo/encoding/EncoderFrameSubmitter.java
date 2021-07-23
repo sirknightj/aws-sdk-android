@@ -100,11 +100,6 @@ public class EncoderFrameSubmitter {
     private final MediaCodec mEncoder;
     private long mFirstFrameTimestamp = -1;
 
-    // START FIELDS FOR DEBUGGING THE CAMERA ROTATION ISSUE
-    private static boolean doneWriting = false;
-    public static Context context;
-    // END FIELDS FOR DEBUGGING THE CAMERA ROTATION ISSUE
-
     public EncoderFrameSubmitter(final MediaCodec encoder) {
         mEncoder = encoder;
     }
@@ -130,48 +125,6 @@ public class EncoderFrameSubmitter {
         final int inputBufferIndex = mEncoder.dequeueInputBuffer(DEQUEUE_NOW);
         final ByteBuffer tmpBuffer = mEncoder.getInputBuffer(inputBufferIndex);
         final int tmpBufferSize = tmpBuffer.capacity();
-
-        // BEGIN DEBUG FOR IMAGE ROTATION ISSUE
-        // Flipping the yuv, and must request access to write to the internal files
-        if (!doneWriting && frameImageYUV420 != null) {
-            Log.d(TAG, "WRITING THE FILE RN");
-
-            byte[] nv21;
-            ByteBuffer yBuffer = frameImageYUV420.getPlanes()[0].getBuffer();
-            ByteBuffer vuBuffer = frameImageYUV420.getPlanes()[2].getBuffer();
-
-            assert(frameImageYUV420.getPlanes()[0].getRowStride() == 1);
-
-            Log.d(TAG, "GOT THE PLANES");
-
-            int ysize = yBuffer.remaining();
-            int vusize = vuBuffer.remaining();
-
-            nv21 = new byte[ysize + vusize];
-
-            yBuffer.get(nv21, 0, ysize);
-            vuBuffer.get(nv21, ysize, vusize);
-
-            Log.d(TAG, "GOT THESE");
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-
-            YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21, frameImageYUV420.getWidth(), frameImageYUV420.getHeight(), null);
-            yuv.compressToJpeg(new Rect(0, 0, frameImageYUV420.getWidth(), frameImageYUV420.getHeight()), 100, out);
-
-            try {
-                FileOutputStream bos = new FileOutputStream(new File(context.getExternalFilesDir(null), "image.jpg"));
-                bos.write(out.toByteArray());
-                bos.close();
-                Log.d(TAG, "DONE WRITING THE FILE");
-                Log.d(TAG, "SAVED THE FILE IN " + context.getExternalFilesDir(null) + "/image.jpg");
-                doneWriting = true;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        } else {
-            Log.d(TAG, "NOT WRITING THE IMAGE TO THE THING");
-        }
-        // END DEBUG FOR IMAGE ROTATION ISSUE
 
         // step two. copy the frame into the encoder input image
         copyCameraFrameIntoInputImage(inputBufferIndex, frameImageYUV420);
