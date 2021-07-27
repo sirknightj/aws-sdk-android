@@ -18,9 +18,7 @@
 package com.amazonaws.mobileconnectors.kinesisvideo.encoding;
 
 import android.content.Context;
-import android.graphics.ImageFormat;
-import android.graphics.Rect;
-import android.graphics.YuvImage;
+import android.graphics.*;
 import android.media.Image;
 import android.media.MediaCodec;
 import android.util.Log;
@@ -97,6 +95,12 @@ public class EncoderFrameSubmitter {
     private static final int NO_FLAGS = 0;
     private static final int DEQUEUE_NOW = -1;
 
+    // START FIELDS FOR DEBUGGING THE CAMERA ROTATION ISSUE
+    public static boolean doneWriting = true;
+    public static Context context;
+    // END FIELDS FOR DEBUGGING THE CAMERA ROTATION ISSUE
+
+
     private final MediaCodec mEncoder;
     private long mFirstFrameTimestamp = -1;
 
@@ -126,6 +130,34 @@ public class EncoderFrameSubmitter {
         final ByteBuffer tmpBuffer = mEncoder.getInputBuffer(inputBufferIndex);
         final int tmpBufferSize = tmpBuffer.capacity();
 
+        Log.d(TAG, "THIS METHOD WAS CALLED!!");
+        // BEGIN DEBUG FOR IMAGE ROTATION ISSUE
+        // Flipping the yuv, and must request access to write to the internal files
+        if (!doneWriting && frameImageYUV420 != null) {
+            Log.d(TAG, "WRITING THE FILE RN");
+            byte[] nv21 = YUV_420_888toNV21(frameImageYUV420);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            nv21 = rotateYUV420Degree90(nv21, frameImageYUV420.getWidth(), frameImageYUV420.getHeight());
+            Log.d(TAG, "WE HAVE REACHED THIS LINE");
+
+            YuvImage yuv = new YuvImage(nv21, ImageFormat.NV21, frameImageYUV420.getHeight(), frameImageYUV420.getWidth(), null);
+            yuv.compressToJpeg(new Rect(0, 0, frameImageYUV420.getHeight(), frameImageYUV420.getWidth()), 100, out);
+
+            try {
+                FileOutputStream bos = new FileOutputStream(new File(context.getExternalFilesDir(null), "image.jpg"));
+                bos.write(out.toByteArray());
+                bos.close();
+                Log.d(TAG, "DONE WRITING THE FILE");
+                Log.d(TAG, "SAVED THE FILE IN " + context.getExternalFilesDir(null) + "/image.jpg");
+                doneWriting = true;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            Log.d(TAG, "NOT WRITING THE IMAGE TO THE THING");
+        }
+        // END DEBUG FOR IMAGE ROTATION ISSUE
+
         // step two. copy the frame into the encoder input image
         copyCameraFrameIntoInputImage(inputBufferIndex, frameImageYUV420);
 
@@ -137,6 +169,55 @@ public class EncoderFrameSubmitter {
                 timestampInUS,
                 flags);
     }
+
+    private static byte[] YUV_420_888toNV21(Image image) {
+        byte[] nv21;
+        ByteBuffer yBuffer = image.getPlanes()[0].getBuffer();
+        ByteBuffer uBuffer = image.getPlanes()[1].getBuffer();
+        ByteBuffer vBuffer = image.getPlanes()[2].getBuffer();
+
+        int ySize = yBuffer.remaining();
+        int uSize = uBuffer.remaining();
+        int vSize = vBuffer.remaining();
+
+        nv21 = new byte[ySize + uSize + vSize];
+
+        //U and V are swapped
+        yBuffer.get(nv21, 0, ySize);
+        vBuffer.get(nv21, ySize, vSize);
+        uBuffer.get(nv21, ySize + vSize, uSize);
+
+        return nv21;
+    }
+
+    private static byte[] rotateYUV420Degree90(byte[] data, int imageWidth, int imageHeight)
+    {
+        byte [] yuv = new byte[imageWidth*imageHeight*3/2];
+        // Rotate the Y luma
+        int i = 0;
+        for(int x = 0;x < imageWidth;x++)
+        {
+            for(int y = imageHeight-1;y >= 0;y--)
+            {
+                yuv[i] = data[y*imageWidth+x];
+                i++;
+            }
+        }
+        // Rotate the U and V color components
+        i = imageWidth*imageHeight*3/2-1;
+        for(int x = imageWidth-1;x > 0;x=x-2)
+        {
+            for(int y = 0;y < imageHeight/2;y++)
+            {
+                yuv[i] = data[(imageWidth*imageHeight)+(y*imageWidth)+x];
+                i--;
+                yuv[i] = data[(imageWidth*imageHeight)+(y*imageWidth)+(x-1)];
+                i--;
+            }
+        }
+        return yuv;
+    }
+
 
     /**
      * this assumes that camera frame and encoder input image have the same format
