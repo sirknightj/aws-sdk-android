@@ -78,7 +78,7 @@ public class KinesisVideoCredentialsProviderImpl extends AbstractKinesisVideoCre
                 log.debug("Refreshed token expiration is %s", expiration);
             } catch (Exception e) {
                 log.error("Failed to set the next token refresh time. Defaulting to 40 minutes.", e);
-                expiration.setTime(expiration.getTime() + TimeUnit.MINUTES.toMillis(40L));
+                expiration.setTime(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(40L));
             }
         }
 
